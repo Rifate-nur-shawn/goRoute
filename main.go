@@ -59,12 +59,36 @@ func getProducts(w http.ResponseWriter, r *http.Request) {
 }
 
 func createProduct(w http.ResponseWriter, r *http.Request){
+    defer r.Body.Close()
 	 var newProduct Product
     
     if err := json.NewDecoder(r.Body).Decode(&newProduct); err != nil {
         w.WriteHeader(http.StatusBadRequest)
         json.NewEncoder(w).Encode(map[string]string{
-            "error": "Invalid JSON",
+            "error": "Invalid JSON format",
+        })
+        return
+    }
+
+    if newProduct.Title ==""{
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error":"Title is required",
+        })
+        return
+    }
+
+    if newProduct.Price <= 0 {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Price must be greater than 0",
+        })
+        return
+    }
+        if len(newProduct.Description) > 500 {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Description must be less than 500 characters",
         })
         return
     }
