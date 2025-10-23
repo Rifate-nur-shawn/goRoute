@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"crypto/rand"
+	"encoding/hex"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -18,10 +20,42 @@ type Product struct {
     ImgUrl      string  `json:"imageUrl"`
 }
 
+type User struct {
+    ID       int    `json:"id"`
+    Username string `json:"username"`
+    Email    string `json:"email"`
+    Password string `json:"-"` // Don't expose password in JSON
+}
+
+type SignupRequest struct {
+    Username string `json:"username"`
+    Email    string `json:"email"`
+    Password string `json:"password"`
+}
+
+type LoginRequest struct {
+    Email    string `json:"email"`
+    Password string `json:"password"`
+}
+
+type AuthResponse struct {
+    Token string          `json:"token"`
+    User  UserResponse    `json:"user"`
+}
+
+type UserResponse struct {
+    ID       int    `json:"id"`
+    Username string `json:"username"`
+    Email    string `json:"email"`
+}
+
 
 var (
     productList []Product
     productMu sync.RWMutex 
+    userList []User
+    userMu sync.RWMutex
+    userIDCounter = 1
 )
 
 func corsMiddleware(next http.Handler)http.Handler{
@@ -102,6 +136,140 @@ func createProduct(w http.ResponseWriter, r *http.Request){
     json.NewEncoder(w).Encode(newProduct)
 }
 
+// Generate a random token
+func generateToken() string {
+    b := make([]byte, 32)
+    rand.Read(b)
+    return hex.EncodeToString(b)
+}
+
+// Signup handler
+func handleSignup(w http.ResponseWriter, r *http.Request) {
+    defer r.Body.Close()
+    var req SignupRequest
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Invalid JSON format",
+        })
+        return
+    }
+
+    // Validate input
+    if req.Username == "" || req.Email == "" || req.Password == "" {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Username, email, and password are required",
+        })
+        return
+    }
+
+    if len(req.Password) < 6 {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Password must be at least 6 characters",
+        })
+        return
+    }
+
+    userMu.Lock()
+    // Check if user already exists
+    for _, u := range userList {
+        if u.Email == req.Email {
+            userMu.Unlock()
+            w.WriteHeader(http.StatusConflict)
+            json.NewEncoder(w).Encode(map[string]string{
+                "error": "User with this email already exists",
+            })
+            return
+        }
+    }
+
+    // Create new user
+    newUser := User{
+        ID:       userIDCounter,
+        Username: req.Username,
+        Email:    req.Email,
+        Password: req.Password, // In production, hash the password!
+    }
+    userIDCounter++
+    userList = append(userList, newUser)
+    userMu.Unlock()
+
+    // Generate token
+    token := generateToken()
+
+    // Create response
+    response := AuthResponse{
+        Token: token,
+        User: UserResponse{
+            ID:       newUser.ID,
+            Username: newUser.Username,
+            Email:    newUser.Email,
+        },
+    }
+
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(response)
+}
+
+// Login handler
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+    defer r.Body.Close()
+    var req LoginRequest
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Invalid JSON format",
+        })
+        return
+    }
+
+    // Validate input
+    if req.Email == "" || req.Password == "" {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Email and password are required",
+        })
+        return
+    }
+
+    userMu.RLock()
+    var foundUser *User
+    for _, u := range userList {
+        if u.Email == req.Email && u.Password == req.Password {
+            foundUser = &u
+            break
+        }
+    }
+    userMu.RUnlock()
+
+    if foundUser == nil {
+        w.WriteHeader(http.StatusUnauthorized)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Invalid email or password",
+        })
+        return
+    }
+
+    // Generate token
+    token := generateToken()
+
+    // Create response
+    response := AuthResponse{
+        Token: token,
+        User: UserResponse{
+            ID:       foundUser.ID,
+            Username: foundUser.Username,
+            Email:    foundUser.Email,
+        },
+    }
+
+    json.NewEncoder(w).Encode(response)
+}
+
 
 func main(){
 	r:= chi.NewRouter()
@@ -116,12 +284,17 @@ func main(){
 	r.Get("/products",getProducts)
 	r.Post("/products",createProduct)
 	
+	// Auth routes
+	r.Post("/api/auth/signup", handleSignup)
+	r.Post("/api/auth/login", handleLogin)
 
 	fmt.Println(" Chi Router server running on :8080")
     fmt.Println(" Available routes:")
     fmt.Println(" GET /name")
     fmt.Println(" GET /products")
     fmt.Println(" POST /products")
+    fmt.Println(" POST /api/auth/signup")
+    fmt.Println(" POST /api/auth/login")
 
 
 
