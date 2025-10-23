@@ -5,15 +5,15 @@ import (
 	"goRoute/handlers"
 	"goRoute/middleware"
 	"net/http"
-	
 
 	"github.com/go-chi/chi/v5"
-	 chimiddleware "github.com/go-chi/chi/v5/middleware"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 func Serve() {
 	r := chi.NewRouter()
 
+	//r.Use(middleware.Logger)
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
@@ -36,16 +36,6 @@ func Serve() {
 	})
 
 	fmt.Println("Server running on http://localhost:8080")
-	fmt.Println("\n Public Routes:")
-	fmt.Println("  POST   /api/auth/signup")
-	fmt.Println("  POST   /api/auth/login")
-	fmt.Println("  GET    /api/products")
-	fmt.Println("  GET    /api/products/{id}")
-	fmt.Println("\n Protected Routes:")
-	fmt.Println("  GET    /api/auth/profile")
-	fmt.Println("  POST   /api/products")
-	fmt.Println("  PUT    /api/products/{id}")
-	fmt.Println("  DELETE /api/products/{id}")
 
 	http.ListenAndServe(":8080", r)
 }
