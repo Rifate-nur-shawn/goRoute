@@ -1,134 +1,57 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"sync"
+"fmt"
+"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+"goRoute/handlers"
+"goRoute/middleware"
+
+"github.com/go-chi/chi/v5"
+chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
-type Product struct {
-    ID          int     `json:"id"`
-    Title       string  `json:"title"`
-    Description string  `json:"description"`
-    Price       float64 `json:"price"`
-    ImgUrl      string  `json:"imageUrl"`
-}
+func main() {
+r := chi.NewRouter()
 
+// Global middleware
+r.Use(chimiddleware.Logger)
+r.Use(chimiddleware.Recoverer)
+r.Use(chimiddleware.RequestID)
+r.Use(middleware.CorsMiddleware)
 
-var (
-    productList []Product
-    productMu sync.RWMutex 
-)
+// Public routes (Auth)
+r.Post("/api/auth/signup", handlers.Signup)
+r.Post("/api/auth/login", handlers.Login)
 
-func corsMiddleware(next http.Handler)http.Handler{
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        defer r.Body.Close()
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-        w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-        w.Header().Set("Content-Type", "application/json")
+// Public product routes
+r.Get("/api/products", handlers.GetProducts)
+r.Get("/api/products/{id}", handlers.GetProductByID)
 
-		if r.Method == http.MethodOptions{
-			w.WriteHeader(http.StatusNoContent)
-            return
-		}
-		next.ServeHTTP(w, r)
-	})	
-}
+// Protected routes
+r.Group(func(r chi.Router) {
+r.Use(middleware.AuthMiddleware)
 
+// User routes
+r.Get("/api/auth/profile", handlers.GetProfile)
 
-func HandleName(w http.ResponseWriter, r *http.Request) {
-    response := map[string]string{
-        "message": "My name is khan",
-    }
-    json.NewEncoder(w).Encode(response)
-}
+// Product management (require auth)
+r.Post("/api/products", handlers.CreateProduct)
+r.Put("/api/products/{id}", handlers.UpdateProduct)
+r.Delete("/api/products/{id}", handlers.DeleteProduct)
+})
 
-func getProducts(w http.ResponseWriter, r *http.Request) {
-     productMu.RLock()
-     product:=productList
-     productMu.RUnlock()
+fmt.Println("🚀 Server running on http://localhost:8080")
+fmt.Println("\n📋 Public Routes:")
+fmt.Println("  POST   /api/auth/signup")
+fmt.Println("  POST   /api/auth/login")
+fmt.Println("  GET    /api/products")
+fmt.Println("  GET    /api/products/{id}")
+fmt.Println("\n🔒 Protected Routes:")
+fmt.Println("  GET    /api/auth/profile")
+fmt.Println("  POST   /api/products")
+fmt.Println("  PUT    /api/products/{id}")
+fmt.Println("  DELETE /api/products/{id}")
 
-       if err := json.NewEncoder(w).Encode(product); err != nil {
-        http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-    }
-}
-
-func createProduct(w http.ResponseWriter, r *http.Request){
-	 var newProduct Product
-    
-    if err := json.NewDecoder(r.Body).Decode(&newProduct); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]string{
-            "error": "Invalid JSON",
-        })
-        return
-    }
-
-    productMu.Lock()
-    newProduct.ID = len(productList) + 1
-    productList = append(productList, newProduct)
-    productMu.Unlock()
-
-    w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(newProduct)
-}
-
-
-func main(){
-	r:= chi.NewRouter()
-
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.RequestID)
-	r.Use(corsMiddleware)
-
-
-	r.Get("/name",HandleName)
-	r.Get("/products",getProducts)
-	r.Post("/products",createProduct)
-	
-
-	fmt.Println(" Chi Router server running on :8080")
-    fmt.Println(" Available routes:")
-    fmt.Println(" GET /name")
-    fmt.Println(" GET /products")
-    fmt.Println(" POST /products")
-
-
-
-	err := http.ListenAndServe(":8080", r)
-    if err != nil {
-        fmt.Println("Server error:", err)
-    }
-}
-
-func init() {
-    productList = []Product{
-        {
-            ID:          1,
-            Title:       "orange",
-            Description: "Orange is red",
-            Price:       100.33,
-            ImgUrl:      "https://media.istockphoto.com/id/1231559990/photo/orange-fruit-with-drop-shadow-on-white-background-commercial-image-of-citrus-fruits-in.jpg?s=612x612&w=0&k=20&c=zEnUx_53uqE-GBCLar_fK4PwJBG3U2pV0vSu0amRFDE=",
-        },
-        {
-            ID:          2,
-            Title:       "mango",
-            Description: "Mango is Green",
-            Price:       150.33,
-            ImgUrl:      "https://www.foodcraft.hk/cdn/shop/files/GreenMango-1pc.jpg?v=1694480506",
-        },
-        {
-            ID:          3,
-            Title:       "Banana",
-            Description: "Banana is Yellow",
-            Price:       15.00,
-            ImgUrl:      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQG7ElBNPs-HbYJJOMHRu7lEmphTn8-52FYKw&s",
-        },
-    }
+http.ListenAndServe(":8080", r)
 }

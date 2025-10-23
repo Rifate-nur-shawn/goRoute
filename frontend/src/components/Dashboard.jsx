@@ -30,7 +30,7 @@ function Dashboard() {
     <div style={{ width: '100%', maxWidth: '1200px' }}>
       <div className="dashboard-header">
         <div>
-          <h2>Welcome, {user?.username}! 👋</h2>
+          <h2>Welcome, {user?.username}! </h2>
           <p className="user-info">Email: {user?.email}</p>
         </div>
         <button className="logout-btn" onClick={handleLogout}>
