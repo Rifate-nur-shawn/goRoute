@@ -14,10 +14,12 @@ func Serve() {
 	r := chi.NewRouter()
 
 	//r.Use(middleware.Logger)
+	
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
 	r.Use(middleware.CorsMiddleware)
+	r.Use(middleware.Useless)
 
 	r.Post("/api/auth/signup", handlers.Signup)
 	r.Post("/api/auth/login", handlers.Login)
