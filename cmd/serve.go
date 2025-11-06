@@ -26,6 +26,7 @@ func Serve() {
 
 	r.Get("/api/products", handlers.GetProducts)
 	r.Get("/api/products/{id}", handlers.GetProductByID)
+	r.Post("/api/CreateUser",handlers.CreateUser)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware)
